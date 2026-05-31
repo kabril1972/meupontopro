@@ -1,0 +1,434 @@
+<!DOCTYPE html>
+<html lang="pt-BR">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>PontoPro Cloud - Seguro</title>
+    <style>
+        :root {
+            --primary: #2563eb;
+            --primary-dark: #1d4ed8;
+            --success: #16a34a;
+            --danger: #dc2626;
+            --warning: #ca8a04;
+            --bg: #f8fafc;
+            --card: #ffffff;
+            --text: #1e293b;
+            --text-light: #64748b;
+        }
+
+        * {
+            box-sizing: border-box;
+            margin: 0;
+            padding: 0;
+            font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif;
+        }
+
+        body {
+            background-color: var(--bg);
+            color: var(--text);
+            padding-bottom: 60px;
+        }
+
+        .status-bar {
+            text-align: center;
+            padding: 6px;
+            font-size: 0.85rem;
+            font-weight: bold;
+            transition: all 0.3s;
+        }
+        .online { background-color: #dcfce7; color: #15803d; }
+        .offline { background-color: #fee2e2; color: #b91c1c; }
+
+        header {
+            background-color: var(--card);
+            padding: 15px;
+            box-shadow: 0 1px 3px rgba(0,0,0,0.1);
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+        }
+
+        .container {
+            max-width: 600px;
+            margin: 20px auto;
+            padding: 0 15px;
+        }
+
+        .card {
+            background: var(--card);
+            border-radius: 12px;
+            padding: 20px;
+            margin-bottom: 20px;
+            box-shadow: 0 4px 6px -1px rgba(0,0,0,0.05);
+        }
+
+        h2 {
+            font-size: 1.2rem;
+            margin-bottom: 15px;
+            color: var(--text);
+            display: flex;
+            align-items: center;
+            gap: 8px;
+        }
+
+        .clock-display {
+            text-align: center;
+            font-size: 2.5rem;
+            font-weight: bold;
+            margin: 10px 0;
+            color: var(--primary);
+        }
+
+        .date-display {
+            text-align: center;
+            color: var(--text-light);
+            margin-bottom: 20px;
+            font-size: 0.95rem;
+        }
+
+        .btn-grid {
+            display: grid;
+            grid-template-columns: 1fr 1fr;
+            gap: 12px;
+        }
+
+        button {
+            padding: 12px;
+            border: none;
+            border-radius: 8px;
+            font-size: 1rem;
+            font-weight: 600;
+            cursor: pointer;
+            transition: background 0.2s;
+            display: flex;
+            justify-content: center;
+            align-items: center;
+            gap: 8px;
+        }
+
+        .btn-primary { background-color: var(--primary); color: white; }
+        .btn-primary:hover { background-color: var(--primary-dark); }
+        .btn-success { background-color: var(--success); color: white; }
+        .btn-danger { background-color: var(--danger); color: white; }
+        .btn-warning { background-color: var(--warning); color: white; }
+
+        .history-list { list-style: none; }
+        .history-item {
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            padding: 12px 0;
+            border-bottom: 1px solid #e2e8f0;
+        }
+        .history-item:last-child { border-bottom: none; }
+
+        .badge {
+            padding: 4px 8px;
+            border-radius: 12px;
+            font-size: 0.75rem;
+            font-weight: bold;
+        }
+        .badge-sync { background-color: #e0f2fe; color: #0369a1; }
+
+        .form-group { margin-bottom: 12px; }
+        label { display: block; margin-bottom: 6px; font-size: 0.9rem; font-weight: 500; }
+        input, select, textarea {
+            width: 100%;
+            padding: 10px;
+            border: 1px solid #cbd5e1;
+            border-radius: 6px;
+            font-size: 0.95rem;
+            background: var(--card);
+            color: var(--text);
+        }
+
+        .toast {
+            position: fixed;
+            top: 20px;
+            left: 50%;
+            transform: translateX(-50%) translateY(-100px);
+            background: #1e293b;
+            color: white;
+            padding: 12px 24px;
+            border-radius: 30px;
+            box-shadow: 0 10px 15px -3px rgba(0,0,0,0.3);
+            transition: transform 0.3s ease;
+            z-index: 1000;
+            font-size: 0.9rem;
+        }
+        .toast.show { transform: translateX(-50%) translateY(0); }
+
+        /* Telas Ocultas inicialmente */
+        #login-screen { display: block; max-width: 400px; margin: 60px auto; }
+        #app-screen { display: none; }
+
+        @media (min-width: 768px) {
+            .grid-layout { display: grid; grid-template-columns: 1fr 1fr; gap: 20px; }
+            .container { max-width: 900px; }
+        }
+    </style>
+</head>
+<body>
+
+    <div id="connection-status" class="status-bar offline">● Desconectado - Faça Login para sincronizar</div>
+
+    <div id="login-screen" class="container">
+        <div class="card">
+            <h2 style="justify-content: center; font-size: 1.5rem; margin-bottom: 20px;">🔒 Acesso PontoPro</h2>
+            <form id="form-login">
+                <div class="form-group">
+                    <label for="login-email">E-mail Cadastrado</label>
+                    <input type="email" id="login-email" placeholder="seuemail@exemplo.com" required>
+                </div>
+                <div class="form-group">
+                    <label for="login-password">Senha de Segurança</label>
+                    <input type="password" id="login-password" placeholder="Sua senha secreta" required>
+                </div>
+                <button type="submit" class="btn-primary" style="width: 100%; margin-top: 10px;">Entrar no Sistema</button>
+            </form>
+        </div>
+    </div>
+
+    <div id="app-screen">
+        <header>
+            <h1>PontoPro ☁️ <span style="font-size: 0.9rem; font-weight: normal; color: var(--text-light)">(Autenticado)</span></h1>
+            <button id="btn-logout" class="btn-danger" style="padding: 6px 12px; font-size: 0.8rem;">
+                🚪 Sair
+            </button>
+        </header>
+
+        <div class="container">
+            <div class="grid-layout">
+                
+                <div>
+                    <div class="card">
+                        <div class="clock-display" id="clock">00:00:00</div>
+                        <div class="date-display" id="date">Carregando data...</div>
+                        
+                        <div class="btn-grid">
+                            <button class="btn-primary" id="btn-entrada">📥 Entrada</button>
+                            <button class="btn-success" id="btn-almoco">🍽️ Almoço</button>
+                            <button class="btn-success" id="btn-retorno">💻 Retorno</button>
+                            <button class="btn-primary" id="btn-saida">📤 Saída</button>
+                        </div>
+                    </div>
+
+                    <div class="card">
+                        <h2>📝 Ajuste & Justificativa</h2>
+                        <form id="form-ajuste">
+                            <div class="form-group">
+                                <label for="adj-date">Data do Ocorrido</label>
+                                <input type="date" id="adj-date" required>
+                            </div>
+                            <div class="form-group">
+                                <label for="adj-type">Tipo de Ajuste</label>
+                                <select id="adj-type" required>
+                                    <option value="Esquecimento de Ponto">Esquecimento de Ponto</option>
+                                    <option value="Atestado Médico">Atestado Médico</option>
+                                    <option value="Trabalho Externo">Trabalho Externo</option>
+                                </select>
+                            </div>
+                            <div class="form-group">
+                                <label for="adj-motivo">Motivo / Descrição</label>
+                                <textarea id="adj-motivo" rows="3" placeholder="Justifique o ajuste aqui..." required></textarea>
+                            </div>
+                            <button type="submit" class="btn-primary" style="width: 100%;">Enviar para o Firebase</button>
+                        </form>
+                    </div>
+                </div>
+
+                <div>
+                    <div class="card">
+                        <h2>📅 Histórico de Pontos (Nuvem)</h2>
+                        <ul class="history-list" id="history-container"></ul>
+                    </div>
+
+                    <div class="card">
+                        <h2>📨 Justificativas Enviadas</h2>
+                        <ul class="history-list" id="justificativas-container"></ul>
+                    </div>
+                </div>
+
+            </div>
+        </div>
+    </div>
+
+    <div id="toast" class="toast">Ação realizada com sucesso!</div>
+
+    <script type="module">
+        import { initializeApp } from "https://www.gstatic.com/firebasejs/10.8.0/firebase-app.js";
+        import { getFirestore, collection, addDoc, query, orderBy, onSnapshot } from "https://www.gstatic.com/firebasejs/10.8.0/firebase-firestore.js";
+        import { getAuth, signInWithEmailAndPassword, signOut, onAuthStateChanged } from "https://www.gstatic.com/firebasejs/10.8.0/firebase-auth.js";
+
+        // Configurações Reais do Banco do Kabril
+        const firebaseConfig = {
+            apiKey: "AIzaSyAD0eDG93kZmGyRKQhbG1648DH0wqEPP-o",
+            authDomain: "meupontopro.firebaseapp.com",
+            projectId: "meupontopro",
+            storageBucket: "meupontopro.firebasestorage.app",
+            messagingSenderId: "455889778063",
+            appId: "1:455889778063:web:7f61c36df7650f9db038f7"
+        };
+
+        // Inicializando os Serviços
+        const app = initializeApp(firebaseConfig);
+        const db = getFirestore(app);
+        const auth = getAuth(app);
+
+        // Referências do HTML para controle de telas
+        const loginScreen = document.getElementById('login-screen');
+        const appScreen = document.getElementById('app-screen');
+        const connectionStatus = document.getElementById('connection-status');
+
+        // Escutador de estado de login (Vigia se o usuário está logado ou não)
+        let unsubscribePontos = null;
+        let unsubscribeJustificativas = null;
+
+        onAuthStateChanged(auth, (user) => {
+            if (user) {
+                // Usuário Logado com sucesso! Mostra o app e esconde a tela de login
+                loginScreen.style.display = 'none';
+                appScreen.style.display = 'block';
+                connectionStatus.className = "status-bar online";
+                connectionStatus.innerText = "● Conexão Segura Ativa com o Firebase";
+                
+                // Ativa a leitura do histórico em tempo real de forma segura
+                ativarLeituraEmTempoReal();
+            } else {
+                // Usuário deslogado. Mostra o login e limpa os dados da tela
+                loginScreen.style.display = 'block';
+                appScreen.style.display = 'none';
+                connectionStatus.className = "status-bar offline";
+                connectionStatus.innerText = "● Desconectado - Faça Login para sincronizar";
+                
+                // Desliga os leitores do banco para poupar memória e manter segurança
+                if (unsubscribePontos) unsubscribePontos();
+                if (unsubscribeJustificativas) unsubscribeJustificativas();
+                document.getElementById('history-container').innerHTML = '';
+                document.getElementById('justificativas-container').innerHTML = '';
+            }
+        });
+
+        // Evento de Login no Formulário
+        document.getElementById('form-login').addEventListener('submit', async (e) => {
+            e.preventDefault();
+            const email = document.getElementById('login-email').value;
+            const password = document.getElementById('login-password').value;
+
+            try {
+                await signInWithEmailAndPassword(auth, email, password);
+                showToast("Acesso concedido com sucesso!");
+            } catch (error) {
+                showToast("Erro no Login: E-mail ou senha incorretos.");
+                console.error(error);
+            }
+        });
+
+        // Botão de Logout (Sair)
+        document.getElementById('btn-logout').addEventListener('click', () => {
+            signOut(auth).then(() => showToast("Você saiu do sistema de ponto."));
+        });
+
+        // Ações dos botões de Ponto
+        document.getElementById('btn-entrada').addEventListener('click', () => registrarPonto('Entrada'));
+        document.getElementById('btn-almoco').addEventListener('click', () => registrarPonto('Almoço Saída'));
+        document.getElementById('btn-retorno').addEventListener('click', () => registrarPonto('Almoço Retorno'));
+        document.getElementById('btn-saida').addEventListener('click', () => registrarPonto('Saída'));
+
+        async function registrarPonto(tipo) {
+            const now = new Date();
+            try {
+                await addDoc(collection(db, "pontos"), {
+                    tipo: tipo,
+                    hora: now.toLocaleTimeString('pt-BR', { hour: '2-digit', minute: '2-digit' }),
+                    data: now.toLocaleDateString('pt-BR'),
+                    timestamp: Date.now(),
+                    userId: auth.currentUser.uid // Salva quem bateu o ponto
+                });
+                showToast(`Ponto de ${tipo} salvo na nuvem!`);
+            } catch (e) {
+                showToast("Erro de permissão ou conexão com o banco.");
+            }
+        }
+
+        // Formulário de envio de Ajuste/Justificativa
+        document.getElementById('form-ajuste').addEventListener('submit', async (e) => {
+            e.preventDefault();
+            const data = document.getElementById('adj-date').value;
+            const tipo = document.getElementById('adj-type').value;
+            const motivo = document.getElementById('adj-motivo').value;
+
+            try {
+                await addDoc(collection(db, "justificativas"), {
+                    dataOcorrido: data,
+                    tipo: tipo,
+                    motivo: motivo,
+                    timestamp: Date.now(),
+                    userId: auth.currentUser.uid
+                });
+                showToast("Justificativa enviada!");
+                document.getElementById('form-ajuste').reset();
+            } catch (e) {
+                showToast("Erro ao enviar justificativa.");
+            }
+        });
+
+        // Função que ativa as leituras em tempo real somente para quem está logado
+        function ativarLeituraEmTempoReal() {
+            const qPontos = query(collection(db, "pontos"), orderBy("timestamp", "desc"));
+            unsubscribePontos = onSnapshot(qPontos, (snapshot) => {
+                const container = document.getElementById('history-container');
+                container.innerHTML = '';
+                if(snapshot.empty) {
+                    container.innerHTML = '<li class="history-item">Nenhum ponto registrado.</li>';
+                    return;
+                }
+                snapshot.forEach((doc) => {
+                    const reg = doc.data();
+                    const li = document.createElement('li');
+                    li.className = 'history-item';
+                    li.innerHTML = `<div><strong>${reg.tipo}</strong><br><small>${reg.data} - ${reg.hora}</small></div><span class="badge badge-sync">☁️ Seguro</span>`;
+                    container.appendChild(li);
+                });
+            });
+
+            const qJustif = query(collection(db, "justificativas"), orderBy("timestamp", "desc"));
+            unsubscribeJustificativas = onSnapshot(qJustif, (snapshot) => {
+                const container = document.getElementById('justificativas-container');
+                container.innerHTML = '';
+                if(snapshot.empty) {
+                    container.innerHTML = '<li class="history-item">Nenhuma justificativa enviada.</li>';
+                    return;
+                }
+                snapshot.forEach((doc) => {
+                    const reg = doc.data();
+                    const li = document.createElement('li');
+                    li.className = 'history-item';
+                    li.innerHTML = `<div><strong>${reg.tipo}</strong><br><small>Ref: ${reg.dataOcorrido}</small><br><span style="font-size:0.85rem;color:var(--text-light)">"${reg.motivo}"</span></div>`;
+                    container.appendChild(li);
+                });
+            });
+        }
+    </script>
+
+    <script>
+        // Relógio local normal
+        function updateClock() {
+            const now = new Date();
+            document.getElementById('clock').innerText = now.toLocaleTimeString('pt-BR');
+            const dateStr = now.toLocaleDateString('pt-BR', { weekday: 'long', year: 'numeric', month: 'long', day: 'numeric' });
+            document.getElementById('date').innerText = dateStr.charAt(0).toUpperCase() + dateStr.slice(1);
+        }
+        setInterval(updateClock, 1000);
+        updateClock();
+
+        function showToast(text) {
+            const toast = document.getElementById('toast');
+            toast.innerText = text;
+            toast.classList.add('show');
+            setTimeout(() => toast.classList.remove('show'), 4000);
+        }
+    </script>
+</body>
+</html>
