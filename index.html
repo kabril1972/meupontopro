@@ -192,7 +192,7 @@
 
     <div id="app-screen">
         <header>
-            <h1>PontoPro ☁️ <span style="font-size: 0.9rem; font-weight: normal; color: var(--text-light)">(Autenticado)</span></h1>
+            <h1>PontoPro ☁️ <span id="nome-exibicao" style="font-size: 0.9rem; font-weight: normal; color: var(--text-light)">(Buscando usuário...)</span></h1>
             <button id="btn-logout" class="btn-danger" style="padding: 6px 12px; font-size: 0.8rem;">
                 🚪 Sair
             </button>
@@ -240,12 +240,12 @@
 
                 <div>
                     <div class="card">
-                        <h2>📅 Histórico de Pontos (Nuvem)</h2>
+                        <h2>📅 Seu Histórico de Pontos</h2>
                         <ul class="history-list" id="history-container"></ul>
                     </div>
 
                     <div class="card">
-                        <h2>📨 Justificativas Enviadas</h2>
+                        <h2>📨 Suas Justificativas</h2>
                         <ul class="history-list" id="justificativas-container"></ul>
                     </div>
                 </div>
@@ -258,7 +258,7 @@
 
     <script type="module">
         import { initializeApp } from "https://www.gstatic.com/firebasejs/10.8.0/firebase-app.js";
-        import { getFirestore, collection, addDoc, query, orderBy, onSnapshot } from "https://www.gstatic.com/firebasejs/10.8.0/firebase-firestore.js";
+        import { getFirestore, collection, addDoc, query, orderBy, onSnapshot, doc, getDoc } from "https://www.gstatic.com/firebasejs/10.8.0/firebase-firestore.js";
         import { getAuth, signInWithEmailAndPassword, signOut, onAuthStateChanged } from "https://www.gstatic.com/firebasejs/10.8.0/firebase-auth.js";
 
         // Configurações Reais do Banco do Kabril
@@ -280,27 +280,50 @@
         const loginScreen = document.getElementById('login-screen');
         const appScreen = document.getElementById('app-screen');
         const connectionStatus = document.getElementById('connection-status');
+        const elNomeExibicao = document.getElementById('nome-exibicao');
 
-        // Escutador de estado de login (Vigia se o usuário está logado ou não)
+        // Escutador de estado de login e variáveis dinâmicas
         let unsubscribePontos = null;
         let unsubscribeJustificativas = null;
+        let nomeFuncionarioLogado = "Funcionário";
 
-        onAuthStateChanged(auth, (user) => {
+        onAuthStateChanged(auth, async (user) => {
             if (user) {
                 // Usuário Logado com sucesso! Mostra o app e esconde a tela de login
                 loginScreen.style.display = 'none';
                 appScreen.style.display = 'block';
                 connectionStatus.className = "status-bar online";
-                connectionStatus.innerText = "● Conexão Segura Ativa com o Firebase";
                 
-                // Ativa a leitura do histórico em tempo real de forma segura
-                ativarLeituraEmTempoReal();
+                try {
+                    // Vai buscar o nome associado ao UID do usuário logado na coleção "usuarios"
+                    const userDocRef = doc(db, "usuarios", user.uid);
+                    const userDocSnap = await getDoc(userDocRef);
+
+                    if (userDocSnap.exists()) {
+                        nomeFuncionarioLogado = userDocSnap.data().nome || "Usuário Sem Nome";
+                    } else {
+                        // Caso falte o cadastro no Firestore, adota a primeira parte do email
+                        nomeFuncionarioLogado = user.email.split('@')[0];
+                    }
+                } catch (error) {
+                    console.error("Erro ao puxar dados do usuário:", error);
+                    nomeFuncionarioLogado = "Funcionário";
+                }
+
+                // Exibe o nome correto no topo da tela
+                elNomeExibicao.innerText = `(Logado como: ${nomeFuncionarioLogado})`;
+                connectionStatus.innerText = `● Conexão Segura Ativa - Olá, ${nomeFuncionarioLogado}`;
+                
+                // Ativa a leitura do histórico em tempo real filtrando pelo usuário logado
+                ativarLeituraEmTempoReal(user.uid);
             } else {
                 // Usuário deslogado. Mostra o login e limpa os dados da tela
                 loginScreen.style.display = 'block';
                 appScreen.style.display = 'none';
                 connectionStatus.className = "status-bar offline";
                 connectionStatus.innerText = "● Desconectado - Faça Login para sincronizar";
+                elNomeExibicao.innerText = "(Buscando usuário...)";
+                nomeFuncionarioLogado = "Funcionário";
                 
                 // Desliga os leitores do banco para poupar memória e manter segurança
                 if (unsubscribePontos) unsubscribePontos();
@@ -344,7 +367,8 @@
                     hora: now.toLocaleTimeString('pt-BR', { hour: '2-digit', minute: '2-digit' }),
                     data: now.toLocaleDateString('pt-BR'),
                     timestamp: Date.now(),
-                    userId: auth.currentUser.uid // Salva quem bateu o ponto
+                    userId: auth.currentUser.uid, // Salva quem bateu o ponto
+                    nomeFuncionario: nomeFuncionarioLogado // Salva o nome real do funcionário de forma inteligente
                 });
                 showToast(`Ponto de ${tipo} salvo na nuvem!`);
             } catch (e) {
@@ -365,7 +389,8 @@
                     tipo: tipo,
                     motivo: motivo,
                     timestamp: Date.now(),
-                    userId: auth.currentUser.uid
+                    userId: auth.currentUser.uid,
+                    nomeFuncionario: nomeFuncionarioLogado // Salva o nome real associado à justificativa
                 });
                 showToast("Justificativa enviada!");
                 document.getElementById('form-ajuste').reset();
@@ -374,40 +399,54 @@
             }
         });
 
-        // Função que ativa as leituras em tempo real somente para quem está logado
-        function ativarLeituraEmTempoReal() {
+        // Função que ativa as leituras em tempo real e exibe apenas os dados do próprio usuário logado
+        function activarLeituraEmTempoReal(uid) {
             const qPontos = query(collection(db, "pontos"), orderBy("timestamp", "desc"));
             unsubscribePontos = onSnapshot(qPontos, (snapshot) => {
                 const container = document.getElementById('history-container');
                 container.innerHTML = '';
-                if(snapshot.empty) {
-                    container.innerHTML = '<li class="history-item">Nenhum ponto registrado.</li>';
-                    return;
-                }
+                
+                let contemPontosPessoais = false;
+                
                 snapshot.forEach((doc) => {
                     const reg = doc.data();
-                    const li = document.createElement('li');
-                    li.className = 'history-item';
-                    li.innerHTML = `<div><strong>${reg.tipo}</strong><br><small>${reg.data} - ${reg.hora}</small></div><span class="badge badge-sync">☁️ Seguro</span>`;
-                    container.appendChild(li);
+                    // Segurança e Privacidade: O usuário comum só visualiza as próprias batidas no celular dele
+                    if (reg.userId === uid) {
+                        contemPontosPessoais = true;
+                        const li = document.createElement('li');
+                        li.className = 'history-item';
+                        li.innerHTML = `<div><strong>${reg.tipo}</strong><br><small>${reg.data} - ${reg.hora}</small></div><span class="badge badge-sync">☁️ Seguro</span>`;
+                        container.appendChild(li);
+                    }
                 });
+
+                if(!contemPontosPessoais) {
+                    container.innerHTML = '<li class="history-item">Nenhum ponto registrado.</li>';
+                }
             });
 
             const qJustif = query(collection(db, "justificativas"), orderBy("timestamp", "desc"));
             unsubscribeJustificativas = onSnapshot(qJustif, (snapshot) => {
                 const container = document.getElementById('justificativas-container');
                 container.innerHTML = '';
-                if(snapshot.empty) {
-                    container.innerHTML = '<li class="history-item">Nenhuma justificativa enviada.</li>';
-                    return;
-                }
+                
+                let contemJustificativasPessoais = false;
+
                 snapshot.forEach((doc) => {
                     const reg = doc.data();
-                    const li = document.createElement('li');
-                    li.className = 'history-item';
-                    li.innerHTML = `<div><strong>${reg.tipo}</strong><br><small>Ref: ${reg.dataOcorrido}</small><br><span style="font-size:0.85rem;color:var(--text-light)">"${reg.motivo}"</span></div>`;
-                    container.appendChild(li);
+                    // Filtra para exibir apenas as justificativas do próprio usuário logado
+                    if (reg.userId === uid) {
+                        contemJustificativasPessoais = true;
+                        const li = document.createElement('li');
+                        li.className = 'history-item';
+                        li.innerHTML = `<div><strong>${reg.tipo}</strong><br><small>Ref: ${reg.dataOcorrido}</small><br><span style="font-size:0.85rem;color:var(--text-light)">"${reg.motivo}"</span></div>`;
+                        container.appendChild(li);
+                    }
                 });
+
+                if(!contemJustificativasPessoais) {
+                    container.innerHTML = '<li class="history-item">Nenhuma justificativa enviada.</li>';
+                }
             });
         }
     </script>
