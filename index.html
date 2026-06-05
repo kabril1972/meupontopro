@@ -400,7 +400,7 @@
         });
 
         // Função que ativa as leituras em tempo real e exibe apenas os dados do próprio usuário logado
-        function activarLeituraEmTempoReal(uid) {
+        function ativarLeituraEmTempoReal(uid) {
             const qPontos = query(collection(db, "pontos"), orderBy("timestamp", "desc"));
             unsubscribePontos = onSnapshot(qPontos, (snapshot) => {
                 const container = document.getElementById('history-container');
