@@ -289,20 +289,17 @@
 
         onAuthStateChanged(auth, async (user) => {
             if (user) {
-                // Usuário Logado com sucesso! Mostra o app e esconde a tela de login
                 loginScreen.style.display = 'none';
                 appScreen.style.display = 'block';
                 connectionStatus.className = "status-bar online";
                 
                 try {
-                    // Vai buscar o nome associado ao UID do usuário logado na coleção "usuarios"
                     const userDocRef = doc(db, "usuarios", user.uid);
                     const userDocSnap = await getDoc(userDocRef);
 
                     if (userDocSnap.exists()) {
                         nomeFuncionarioLogado = userDocSnap.data().nome || "Usuário Sem Nome";
                     } else {
-                        // Caso falte o cadastro no Firestore, adota a primeira parte do email
                         nomeFuncionarioLogado = user.email.split('@')[0];
                     }
                 } catch (error) {
@@ -310,14 +307,11 @@
                     nomeFuncionarioLogado = "Funcionário";
                 }
 
-                // Exibe o nome correto no topo da tela
                 elNomeExibicao.innerText = `(Logado como: ${nomeFuncionarioLogado})`;
                 connectionStatus.innerText = `● Conexão Segura Ativa - Olá, ${nomeFuncionarioLogado}`;
                 
-                // Ativa a leitura do histórico em tempo real filtrando pelo usuário logado
                 ativarLeituraEmTempoReal(user.uid);
             } else {
-                // Usuário deslogado. Mostra o login e limpa os dados da tela
                 loginScreen.style.display = 'block';
                 appScreen.style.display = 'none';
                 connectionStatus.className = "status-bar offline";
@@ -325,7 +319,6 @@
                 elNomeExibicao.innerText = "(Buscando usuário...)";
                 nomeFuncionarioLogado = "Funcionário";
                 
-                // Desliga os leitores do banco para poupar memória e manter segurança
                 if (unsubscribePontos) unsubscribePontos();
                 if (unsubscribeJustificativas) unsubscribeJustificativas();
                 document.getElementById('history-container').innerHTML = '';
@@ -359,18 +352,36 @@
         document.getElementById('btn-retorno').addEventListener('click', () => registrarPonto('Almoço Retorno'));
         document.getElementById('btn-saida').addEventListener('click', () => registrarPonto('Saída'));
 
+        // NOVA FUNÇÃO COM INTELIGÊNCIA DE CORTES DE HORÁRIO (18:48)
         async function registrarPonto(tipo) {
             const now = new Date();
+            const horaAtual = now.getHours();
+            const minutoAtual = now.getMinutes();
+            
+            let tipoFinal = tipo;
+
+            // Se for Entrada ou Saída comum, checa se passou das 18:48
+            if (tipo === 'Entrada' || tipo === 'Saída') {
+                if (horaAtual > 18 || (horaAtual === 18 && minutoAtual >= 48)) {
+                    tipoFinal = `Extra ${tipo}`; // Vira "Extra Entrada" ou "Extra Saída"
+                }
+            }
+
             try {
                 await addDoc(collection(db, "pontos"), {
-                    tipo: tipo,
+                    tipo: tipoFinal,
                     hora: now.toLocaleTimeString('pt-BR', { hour: '2-digit', minute: '2-digit' }),
                     data: now.toLocaleDateString('pt-BR'),
                     timestamp: Date.now(),
-                    userId: auth.currentUser.uid, // Salva quem bateu o ponto
-                    nomeFuncionario: nomeFuncionarioLogado // Salva o nome real do funcionário de forma inteligente
+                    userId: auth.currentUser.uid,
+                    nomeFuncionario: nomeFuncionarioLogado
                 });
-                showToast(`Ponto de ${tipo} salvo na nuvem!`);
+                
+                if (tipoFinal !== tipo) {
+                    showToast(`🌙 Hora Extraordinária (${tipoFinal}) salva na nuvem!`);
+                } else {
+                    showToast(`Ponto de ${tipo} salvo na nuvem!`);
+                }
             } catch (e) {
                 showToast("Erro de permissão ou conexão com o banco.");
             }
@@ -390,7 +401,7 @@
                     motivo: motivo,
                     timestamp: Date.now(),
                     userId: auth.currentUser.uid,
-                    nomeFuncionario: nomeFuncionarioLogado // Salva o nome real associado à justificativa
+                    nomeFuncionario: nomeFuncionarioLogado
                 });
                 showToast("Justificativa enviada!");
                 document.getElementById('form-ajuste').reset();
@@ -399,7 +410,6 @@
             }
         });
 
-        // Função que ativa as leituras em tempo real e exibe apenas os dados do próprio usuário logado
         function ativarLeituraEmTempoReal(uid) {
             const qPontos = query(collection(db, "pontos"), orderBy("timestamp", "desc"));
             unsubscribePontos = onSnapshot(qPontos, (snapshot) => {
@@ -410,7 +420,6 @@
                 
                 snapshot.forEach((doc) => {
                     const reg = doc.data();
-                    // Segurança e Privacidade: O usuário comum só visualiza as próprias batidas no celular dele
                     if (reg.userId === uid) {
                         contemPontosPessoais = true;
                         const li = document.createElement('li');
@@ -434,7 +443,6 @@
 
                 snapshot.forEach((doc) => {
                     const reg = doc.data();
-                    // Filtra para exibir apenas as justificativas do próprio usuário logado
                     if (reg.userId === uid) {
                         contemJustificativasPessoais = true;
                         const li = document.createElement('li');
@@ -452,7 +460,6 @@
     </script>
 
     <script>
-        // Relógio local normal
         function updateClock() {
             const now = new Date();
             document.getElementById('clock').innerText = now.toLocaleTimeString('pt-BR');
