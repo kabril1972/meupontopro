@@ -276,6 +276,65 @@
         const db = getFirestore(app);
         const auth = getAuth(app);
 
+        // --- FUNÇÃO INTELIGENTE DE VERIFICAÇÃO DE FOLGA AUTOMÁTICA ---
+async function verificarEFataturarFolga(userLogado) {
+    if (!userLogado) return;
+
+    const agora = new Date();
+    const dataHojeFormatada = agora.toLocaleDateString('pt-BR');
+
+    // Gera o ID do documento baseado no ano e mês atual (Ex: 2026_06)
+    const anoAtual = agora.getFullYear();
+    const mesAtual = String(agora.getMonth() + 1).padStart(2, '0');
+    const idDocFolga = `${anoAtual}_${mesAtual}`;
+
+    try {
+        // 1. Busca a lista de folgas do mês no Firebase
+        const docRef = doc(db, "escala_folgas", idDocFolga);
+        const docSnap = await getDoc(docRef);
+
+        if (docSnap.exists()) {
+            const listaFolgas = docSnap.data().datas || [];
+
+            // 2. Verifica se a data de hoje está na lista de folgas
+            if (listaFolgas.includes(dataHojeFormatada)) {
+                console.log("Hoje é seu dia de folga! Ativando modo descanso.");
+
+                // Bloqueia os botões na tela para evitar cliques acidentais
+                document.getElementById('btn-entrada').disabled = true;
+                document.getElementById('btn-almoco').disabled = true;
+                document.getElementById('btn-retorno').disabled = true;
+                document.getElementById('btn-saida').disabled = true;
+
+                // 3. Checa se já existe um registro de "FOLGA" hoje para não duplicar
+                const pontosRef = collection(db, "pontos");
+                const q = query(
+                    pontosRef,
+                    where("userId", "==", userLogado.uid),
+                    where("data", "==", dataHojeFormatada),
+                    where("tipo", "==", "FOLGA")
+                );
+                const querySnapshot = await getDocs(q);
+
+                // 4. Se não houver registro de FOLGA hoje, o sistema cria um automaticamente
+                if (querySnapshot.empty) {
+                    await addDoc(collection(db, "pontos"), {
+                        tipo: "FOLGA",
+                        hora: "--:--",
+                        data: dataHojeFormatada,
+                        timestamp: Date.now(),
+                        userId: userLogado.uid,
+                        nomeFuncionario: nomeFuncionarioLogado
+                    });
+                    console.log("Registro de FOLGA adicionado ao seu histórico com sucesso!");
+                }
+            }
+        }
+    } catch (erro) {
+        console.error("Erro ao verificar calendário de folgas: ", erro);
+    }
+}
+
         // Referências do HTML para controle de telas
         const loginScreen = document.getElementById('login-screen');
         const appScreen = document.getElementById('app-screen');
@@ -302,6 +361,8 @@
                     } else {
                         nomeFuncionarioLogado = user.email.split('@')[0];
                     }
+                   // Ativa a verificação automática de folga para o usuário logado
+            await verificarEFataturarFolga(user); 
                 } catch (error) {
                     console.error("Erro ao puxar dados do usuário:", error);
                     nomeFuncionarioLogado = "Funcionário";
@@ -376,17 +437,21 @@
                     userId: auth.currentUser.uid,
                     nomeFuncionario: nomeFuncionarioLogado
                 });
+
+ 
+
                 
                 if (tipoFinal !== tipo) {
                     showToast(`🌙 Hora Extraordinária (${tipoFinal}) salva na nuvem!`);
                 } else {
                     showToast(`Ponto de ${tipo} salvo na nuvem!`);
                 }
+            
             } catch (e) {
                 showToast("Erro de permissão ou conexão com o banco.");
+            
             }
         }
-
         // Formulário de envio de Ajuste/Justificativa
         document.getElementById('form-ajuste').addEventListener('submit', async (e) => {
             e.preventDefault();
